@@ -1,0 +1,120 @@
+#2027秋招代码手撕
+##注意力机制
+1.scaled_dot_product_attention
+难点：各种mask
+- mask
+  scores = scores.masked_fill(mask == 0, -float("inf")),将注意力为0的部分，赋予负无穷
+  我们来把这个函数扔进一个具体的 Python 运行场景里，用数字说话。
+
+假设我们有一个非常简单的任务：**判断两个词的相似度**。
+
+我们简化问题，假设：
+1.  Batch Size = 1（只有一句话）
+2.  Sequence Length = 2（这句话只有两个词：["你好", "再见"]）
+3.  Embedding Dim = 2（向量只有 2 个数字，方便展示）
+
+🧮 第一步：准备数据 (Q, K, V)
+
+假设经过 embedding 层后，我们的 Query (Q) 和 Key (K) 是这样的矩阵（为了计算简单，我手动设定了数值）：
+
+import torch
+from math import sqrt
+
+假设 "你好" 的向量是 
+假设 "再见" 的向量是 [[source_group_web_1]]
+
+Query 矩阵 (2个词, 每个词2维)
+Q = torch.tensor([[[1., 0.],    # 词1: 你好
+                  [0., 1.]]])   # 词2: 再见
+
+Key 矩阵 (和Q一样)
+K = torch.tensor([[[1., 0.],
+                  [0., 1.]]])
+
+Value 矩阵 (这里我们只关注分数，Value暂时不用看)
+V = torch.tensor([[[1., 0.],
+                  [0., 1.]]])
+
+⚙️ 第二步：模拟代码执行
+
+我们代入你的函数：
+
+def scaled_dot_product_attention(query, key, value, query_mask=None, key_mask=None, mask=None):
+    dim_k = query.size(-1) # dim_k = 2
+    # 1. 计算点积得分
+    # torch.bmm 是矩阵乘法
+    # Q:       K^T: 
+    #               
+    # 结果 scores:
+    #       [1*1+0*0, 1*0+0*1]     =     
+    #       [0*1+1*0, 0*0+1*1]          
+    scores = torch.bmm(query, key.transpose(1,2)) / sqrt(dim_k)
+    
+    # 2. 处理 Mask (关键区别在这里！)
+    # 因为我们没有传入任何 mask，所以这段代码直接跳过
+    # if mask is not None: ... 
+    # elif query_mask is not None ... [[source_group_web_2]]
+
+    # 3. 计算 Softmax 权重
+    weights = F.softmax(scores, dim=-1)
+    
+    # 4. 返回结果
+    return torch.bmm(weights, value)
+
+🔑 核心对比：加不加 Mask 的中间结果
+
+我们现在只看 scores 矩阵计算出来的那一刻。
+
+📝 情况一：不加 Mask (None)
+
+因为没有 Mask，scores 就是纯粹的点积除以缩放因子 (sqrt{2} approx 1.414)：
+
+ Scores_{no_mask} = frac{1}{1.414} times begin{bmatrix} 1 & 0 \ 0 & 1 end{bmatrix} approx begin{bmatrix} 0.707 & 0 \ 0 & 0.707 end{bmatrix} 
+
+**模型看到的世界：**
+*   **"你好"** 和 **"再见"** 的得分是 0。
+*   **"你好"** 和 **"你好"** 的得分是 0.707。
+*   **"再见"** 和 **"再见"** 的得分是 0.707。
+
+**结论：** 模型认为这两个词**完全不相关**（因为向量正交）。这在数学上是正确的，但在 NLP 任务中，如果我们是在做自回归生成（比如写诗），我们其实希望模型能按顺序一个字一个字生成，而不是让最后一个字一开始就看到第一个字。
+
+📝 情况二：加了 Causal Mask (假设 mask 是一个上三角为 True 的矩阵)
+
+假设我们现在在做生成任务，我们传入了一个 mask，目的是**不让后面的词看到前面的词**（或者更准确地说，不让当前位置看到未来的位置）。
+
+假设 mask 长这样（在代码中，通常 True 或 1 表示需要被屏蔽/掩码的位置）：
+这是一个因果掩码（Causal Mask），意思是：
+位置0（你好）：可以看位置0，不可以看位置1（再见）
+位置1（再见）：可以看位置0和1
+但在标准实现中，通常是对角线以下为True（可见），以上为False（不可见）。
+为了演示你的代码逻辑，假设我们传入的 mask 是：
+mask = [[[False, True],    # 第一行：屏蔽位置1
+[False, False]]]   # 第二行：都不屏蔽
+
+代入你的代码逻辑：
+if mask is not None:
+    # scores 原本是 [[0.707, 0], [0, 0.707]]
+    # 执行 masked_fill(mask == 0, -inf)
+    # 把 mask 中为 0 (或者False) 的位置对应的 scores 改成 -inf
+    # 注意：你的代码里是 mask==0，所以如果 mask 是布尔值，False 会被替换成 -inf
+    # 这里假设 mask 是 0/1 整数，mask==0 即寻找不可见区域
+    scores = scores.masked_fill(mask == 0, -float("inf"))
+
+**处理后的 scores 变成：**
+ Scores_{masked} approx begin{bmatrix} 0.707 & -infty \ 0 & 0.707 end{bmatrix} 
+
+**Softmax 之后：**
+*   第一行：[ text{softmax}(0.707), text{softmax}(-infty) ] rightarrow 
+    *   （因为 e^{-infty} = 0）
+*   第二行：[ text{softmax}(0), text{softmax}(0.707) ] rightarrow [0.5, 0.5] （假设经过归一化）[[source_group_web_3]]
+
+**模型看到的世界（加了 Mask 后）：**
+*   当模型在看**第一个词 "你好"** 时，它**完全忽略了 "再见"**（因为被设成了 -infty，权重变成了 0）。
+*   当模型在看**第二个词 "再见"** 时，它可以同时看到 "你好" 和 "再见"。
+
+📌 总结这个例子
+
+*   **不加 Mask：** 矩阵是对称的，所有词平等互看。
+*   **加了 Mask：** 矩阵的右上角（未来信息）被强行变成了 0 概率。
+
+这就是为什么在写小说、聊天机器人里，**必须加 Mask**。如果不加，模型在写第一个字的时候，就已经“看到”了结局，这就不是“预测”了，而是“抄答案”。
