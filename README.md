@@ -1,6 +1,6 @@
-#2027秋招代码手撕
+2027秋招代码手撕
 
-##注意力机制
+注意力机制
 
 1.scaled_dot_product_attention
 难点：各种mask
