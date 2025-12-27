@@ -16,19 +16,22 @@
 假设经过 embedding 层后，我们的 Query (Q) 和 Key (K) 是这样的矩阵（为了计算简单，我手动设定了数值）：
 
 **Query 矩阵 (2个词, 每个词2维)**
-python
+```python
 Q = torch.tensor([[[1., 0.],    # 词1: 你好
                   [0., 1.]]])   # 词2: 再见
+```
 
 **Key 矩阵 (和Q一样)**
-python
+```python
 K = torch.tensor([[[1., 0.],
                   [0., 1.]]])
+```
 
 **Value 矩阵**
-python
+```python
 V = torch.tensor([[[1., 0.],
                   [0., 1.]]])
+```
 
 ⚙️ 第二步：模拟代码执行
 
@@ -41,7 +44,7 @@ V = torch.tensor([[[1., 0.],
 因为没有 Mask，scores 就是纯粹的点积除以缩放因子 $\sqrt{2}$：
 
 $$
-\text{Scores}_{\text{no\_mask}} = \frac{1}{1.414} \times
+\text{Scores}_{\text{no}\_\text{mask}} = \frac{1}{\sqrt{2}} \times
 \begin{bmatrix}
 1 & 0 \\
 0 & 1
@@ -66,19 +69,20 @@ $$
 
 **处理后的 scores 变成：**
 
-text{Scores}_{text{masked}} approx 
-begin{bmatrix} 
-0.707 & -infty \ 
+$$
+\text{Scores}_{\text{masked}} \approx 
+\begin{bmatrix} 
+0.707 & -\infty \\ 
 0 & 0.707 
-end{bmatrix}
+\end{bmatrix}
+$$
 
 **Softmax 之后：**
-*   第一行：$\text{softmax}(0.707), \text{softmax}(-\infty) \rightarrow [\text{值}, 0]$  
-    （因为 $e^{-\infty} = 0$）
-*   第二行：$\text{softmax}(0), \text{softmax}(0.707) \rightarrow [0.5, 0.5]$ （假设经过归一化）
+- **第一行**：[1.0, 0] （因为 $e^{-\infty} = 0$）
+- **第二行**：[0.31, 0.69] （注：真实计算结果为 $\text{softmax}([0, 0.707]) = \left[ \frac{e^0}{e^0+e^{0.707}}, \frac{e^{0.707}}{e^0+e^{0.707}} \right] \approx [0.31, 0.69]$）
 
 **模型看到的世界（加了 Mask 后）：**
--   当模型在看**第一个词 "你好"** 时，它**完全忽略了 "再见"**（因为被设成了 -infty，权重变成了 0）。
+-   当模型在看**第一个词 "你好"** 时，它**完全忽略了 "再见"**（因为被设成了 $-\infty$，权重变成了 0）。
 -   当模型在看**第二个词 "再见"** 时，它可以同时看到 "你好" 和 "再见"。
 
 📌 总结这个例子
