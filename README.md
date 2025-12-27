@@ -1,10 +1,10 @@
 #2027秋招代码手撕
+
 ##注意力机制
+
 1.scaled_dot_product_attention
 难点：各种mask
-- mask
-  scores = scores.masked_fill(mask == 0, -float("inf")),将注意力为0的部分，赋予负无穷
-  我们来把这个函数扔进一个具体的 Python 运行场景里，用数字说话。
+- mask：scores = scores.masked_fill(mask == 0, -float("inf")),将注意力为0的部分，赋予负无穷
 
 假设我们有一个非常简单的任务：**判断两个词的相似度**。
 
@@ -16,9 +16,6 @@
 🧮 第一步：准备数据 (Q, K, V)
 
 假设经过 embedding 层后，我们的 Query (Q) 和 Key (K) 是这样的矩阵（为了计算简单，我手动设定了数值）：
-
-import torch
-from math import sqrt
 
 假设 "你好" 的向量是 
 假设 "再见" 的向量是 [[source_group_web_1]]
@@ -36,30 +33,6 @@ V = torch.tensor([[[1., 0.],
                   [0., 1.]]])
 
 ⚙️ 第二步：模拟代码执行
-
-我们代入你的函数：
-
-def scaled_dot_product_attention(query, key, value, query_mask=None, key_mask=None, mask=None):
-    dim_k = query.size(-1) # dim_k = 2
-    # 1. 计算点积得分
-    # torch.bmm 是矩阵乘法
-    # Q:       K^T: 
-    #               
-    # 结果 scores:
-    #       [1*1+0*0, 1*0+0*1]     =     
-    #       [0*1+1*0, 0*0+1*1]          
-    scores = torch.bmm(query, key.transpose(1,2)) / sqrt(dim_k)
-    
-    # 2. 处理 Mask (关键区别在这里！)
-    # 因为我们没有传入任何 mask，所以这段代码直接跳过
-    # if mask is not None: ... 
-    # elif query_mask is not None ... [[source_group_web_2]]
-
-    # 3. 计算 Softmax 权重
-    weights = F.softmax(scores, dim=-1)
-    
-    # 4. 返回结果
-    return torch.bmm(weights, value)
 
 🔑 核心对比：加不加 Mask 的中间结果
 
@@ -81,24 +54,6 @@ def scaled_dot_product_attention(query, key, value, query_mask=None, key_mask=No
 📝 情况二：加了 Causal Mask (假设 mask 是一个上三角为 True 的矩阵)
 
 假设我们现在在做生成任务，我们传入了一个 mask，目的是**不让后面的词看到前面的词**（或者更准确地说，不让当前位置看到未来的位置）。
-
-假设 mask 长这样（在代码中，通常 True 或 1 表示需要被屏蔽/掩码的位置）：
-这是一个因果掩码（Causal Mask），意思是：
-位置0（你好）：可以看位置0，不可以看位置1（再见）
-位置1（再见）：可以看位置0和1
-但在标准实现中，通常是对角线以下为True（可见），以上为False（不可见）。
-为了演示你的代码逻辑，假设我们传入的 mask 是：
-mask = [[[False, True],    # 第一行：屏蔽位置1
-[False, False]]]   # 第二行：都不屏蔽
-
-代入你的代码逻辑：
-if mask is not None:
-    # scores 原本是 [[0.707, 0], [0, 0.707]]
-    # 执行 masked_fill(mask == 0, -inf)
-    # 把 mask 中为 0 (或者False) 的位置对应的 scores 改成 -inf
-    # 注意：你的代码里是 mask==0，所以如果 mask 是布尔值，False 会被替换成 -inf
-    # 这里假设 mask 是 0/1 整数，mask==0 即寻找不可见区域
-    scores = scores.masked_fill(mask == 0, -float("inf"))
 
 **处理后的 scores 变成：**
  Scores_{masked} approx begin{bmatrix} 0.707 & -infty \ 0 & 0.707 end{bmatrix} 
