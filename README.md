@@ -1,9 +1,8 @@
 # 2027秋招代码手撕
 ## 注意力机制
 
-1.scaled_dot_product_attention
-难点：各种mask
-- mask：scores = scores.masked_fill(mask == 0, -float("inf")),将注意力为0的部分，赋予负无穷
+1.**难点：** 各种 mask
+- **mask：** scores = scores.masked_fill(mask == 0, -float("inf"))，将注意力为0的部分，赋予负无穷。
 
 假设我们有一个非常简单的任务：**判断两个词的相似度**。
 
@@ -16,61 +15,75 @@
 
 假设经过 embedding 层后，我们的 Query (Q) 和 Key (K) 是这样的矩阵（为了计算简单，我手动设定了数值）：
 
-假设 "你好" 的向量是 
-假设 "再见" 的向量是 [[source_group_web_1]]
-
-Query 矩阵 (2个词, 每个词2维)
+**Query 矩阵 (2个词, 每个词2维)**
+python
 Q = torch.tensor([[[1., 0.],    # 词1: 你好
                   [0., 1.]]])   # 词2: 再见
 
-Key 矩阵 (和Q一样)
+**Key 矩阵 (和Q一样)**
+python
 K = torch.tensor([[[1., 0.],
                   [0., 1.]]])
 
-Value 矩阵 (这里我们只关注分数，Value暂时不用看)
+**Value 矩阵**
+python
 V = torch.tensor([[[1., 0.],
                   [0., 1.]]])
 
 ⚙️ 第二步：模拟代码执行
 
-🔑 核心对比：加不加 Mask 的中间结果
+**🔑 核心对比：加不加 Mask 的中间结果**
 
 我们现在只看 scores 矩阵计算出来的那一刻。
 
-📝 情况一：不加 Mask (None)
+**📝 情况一：不加 Mask (None)**
 
-因为没有 Mask，scores 就是纯粹的点积除以缩放因子 (sqrt{2} approx 1.414)：
+因为没有 Mask，scores 就是纯粹的点积除以缩放因子 (\sqrt{2})：
 
 $$
-\text{Scores}_{\text{no\_mask}} = \frac{1}{1.414} \times \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} \approx \begin{bmatrix} 0.707 & 0 \\ 0 & 0.707 \end{bmatrix}
+\text{Scores}_{\text{no\_mask}} = \frac{1}{1.414} \times
+\begin{bmatrix}
+1 & 0 \\
+0 & 1
+\end{bmatrix}
+\approx
+\begin{bmatrix}
+0.707 & 0 \\
+0 & 0.707
+\end{bmatrix}
 $$
 
 **模型看到的世界：**
-*   **"你好"** 和 **"再见"** 的得分是 0。
-*   **"你好"** 和 **"你好"** 的得分是 0.707。
-*   **"再见"** 和 **"再见"** 的得分是 0.707。
+-   **"你好"** 和 **"再见"** 的得分是 0。
+-   **"你好"** 和 **"你好"** 的得分是 0.707。
+-   **"再见"** 和 **"再见"** 的得分是 0.707。
 
 **结论：** 模型认为这两个词**完全不相关**（因为向量正交）。这在数学上是正确的，但在 NLP 任务中，如果我们是在做自回归生成（比如写诗），我们其实希望模型能按顺序一个字一个字生成，而不是让最后一个字一开始就看到第一个字。
 
-📝 情况二：加了 Causal Mask (假设 mask 是一个上三角为 True 的矩阵)
+**📝 情况二：加了 Causal Mask**
 
-假设我们现在在做生成任务，我们传入了一个 mask，目的是**不让后面的词看到前面的词**（或者更准确地说，不让当前位置看到未来的位置）。
+假设我们现在在做生成任务，我们传入了一个 mask，目的是**不让后面的词看到前面的词**。
 
 **处理后的 scores 变成：**
- Scores_{masked} approx begin{bmatrix} 0.707 & -infty \ 0 & 0.707 end{bmatrix} 
+
+text{Scores}_{text{masked}} approx 
+begin{bmatrix} 
+0.707 & -infty \ 
+0 & 0.707 
+end{bmatrix}
 
 **Softmax 之后：**
 *   第一行：$\text{softmax}(0.707), \text{softmax}(-\infty) \rightarrow [\text{值}, 0]$  
-    *   （因为 $e^{-\infty} = 0$）
-*   第二行：$\text{softmax}(0), \text{softmax}(0.707) \rightarrow [0.5, 0.5]$ （假设经过归一化）<websource>source_group_web_3</websource>
+    （因为 $e^{-\infty} = 0$）
+*   第二行：$\text{softmax}(0), \text{softmax}(0.707) \rightarrow [0.5, 0.5]$ （假设经过归一化）
 
 **模型看到的世界（加了 Mask 后）：**
-*   当模型在看**第一个词 "你好"** 时，它**完全忽略了 "再见"**（因为被设成了 -infty，权重变成了 0）。
-*   当模型在看**第二个词 "再见"** 时，它可以同时看到 "你好" 和 "再见"。
+-   当模型在看**第一个词 "你好"** 时，它**完全忽略了 "再见"**（因为被设成了 -infty，权重变成了 0）。
+-   当模型在看**第二个词 "再见"** 时，它可以同时看到 "你好" 和 "再见"。
 
 📌 总结这个例子
 
-*   **不加 Mask：** 矩阵是对称的，所有词平等互看。
-*   **加了 Mask：** 矩阵的右上角（未来信息）被强行变成了 0 概率。
+-   **不加 Mask：** 矩阵是对称的，所有词平等互看。
+-   **加了 Mask：** 矩阵的右上角（未来信息）被强行变成了 0 概率。
 
 这就是为什么在写小说、聊天机器人里，**必须加 Mask**。如果不加，模型在写第一个字的时候，就已经“看到”了结局，这就不是“预测”了，而是“抄答案”。
