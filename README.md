@@ -41,7 +41,9 @@ V = torch.tensor([[[1., 0.],
 
 因为没有 Mask，scores 就是纯粹的点积除以缩放因子 (sqrt{2} approx 1.414)：
 
- Scores_{no_mask} = frac{1}{1.414} times begin{bmatrix} 1 & 0 \ 0 & 1 end{bmatrix} approx begin{bmatrix} 0.707 & 0 \ 0 & 0.707 end{bmatrix} 
+$$
+\text{Scores}_{\text{no\_mask}} = \frac{1}{1.414} \times \begin{bmatrix} 1 & 0 \\ 0 & 1 \end{bmatrix} \approx \begin{bmatrix} 0.707 & 0 \\ 0 & 0.707 \end{bmatrix}
+$$
 
 **模型看到的世界：**
 *   **"你好"** 和 **"再见"** 的得分是 0。
@@ -58,9 +60,9 @@ V = torch.tensor([[[1., 0.],
  Scores_{masked} approx begin{bmatrix} 0.707 & -infty \ 0 & 0.707 end{bmatrix} 
 
 **Softmax 之后：**
-*   第一行：[ text{softmax}(0.707), text{softmax}(-infty) ] rightarrow 
-    *   （因为 e^{-infty} = 0）
-*   第二行：[ text{softmax}(0), text{softmax}(0.707) ] rightarrow [0.5, 0.5] （假设经过归一化）[[source_group_web_3]]
+*   第一行：$\text{softmax}(0.707), \text{softmax}(-\infty) \rightarrow [\text{值}, 0]$  
+    *   （因为 $e^{-\infty} = 0$）
+*   第二行：$\text{softmax}(0), \text{softmax}(0.707) \rightarrow [0.5, 0.5]$ （假设经过归一化）<websource>source_group_web_3</websource>
 
 **模型看到的世界（加了 Mask 后）：**
 *   当模型在看**第一个词 "你好"** 时，它**完全忽略了 "再见"**（因为被设成了 -infty，权重变成了 0）。
