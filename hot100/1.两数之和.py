@@ -15,3 +15,31 @@
 # 示例 3：
 # 输入：nums = [3,3], target = 6
 # 输出：[0,1]
+
+#方法一：核心函数
+def liangshu(nums,target):
+    idx={}
+    for i in range(len(nums)):
+        if target-nums[i] in idx:
+            return [idx[target-nums[i]],i]
+        idx[nums[i]]=i
+    return  []
+
+nums=[2,7,11,15]
+ans=liangshu(nums,9)
+print(ans)
+#方法二：ACM
+
+import sys
+def main():
+    n,target=map(int,sys.stdin.readline().strip().split())
+    nums=list(map(int,sys.stdin.readline().strip().split()))
+
+    hash={}
+    for i,x in enumerate(nums):
+        if target-x in hash:
+            print([hash[target - x], i])
+            return
+        hash[x]=i
+if __name__=="__main__":
+    main()
