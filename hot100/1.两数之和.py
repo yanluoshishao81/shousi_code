@@ -25,14 +25,14 @@ def liangshu(nums,target):
         idx[nums[i]]=i
     return  []
 
-nums=[2,7,11,15]
-ans=liangshu(nums,9)
-print(ans)
+# nums=[2,7,11,15]
+# ans=liangshu(nums,9)
+# print(ans)
 #方法二：ACM
 
 import sys
 def main():
-    n,target=map(int,sys.stdin.readline().strip().split())
+    target=int(sys.stdin.readline().strip())
     nums=list(map(int,sys.stdin.readline().strip().split()))
 
     hash={}
